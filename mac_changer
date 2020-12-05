@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 #This program changes your Mac [Hardware] address.
+#use by adding --i or --interface and then -m or --mac as script parameters
+#example ./mac_changer -i eth0 -m 00:11:22:33:44:55
 
 import subprocess
 import optparse
