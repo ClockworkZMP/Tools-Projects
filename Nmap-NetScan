@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Define variables
+NETWORK="192.168.1.0/24"  # Change to your target subnet
+OUTPUT_FILE="live_hosts.txt"
+
+echo "[*] Performing stealthy initial scan on $NETWORK..."
+nmap -sn -n -T2 --min-rate 200 --max-retries 2 $NETWORK -oG - | awk '/Up$/{print $2}' > $OUTPUT_FILE
+
+echo "[*] Live hosts saved to $OUTPUT_FILE"
+
+if [ -s $OUTPUT_FILE ]; then
+    echo "[*] Running aggressive scan on discovered hosts..."
+    nmap -A -p- -iL $OUTPUT_FILE -oN aggressive_scan.txt
+    echo "[*] Aggressive scan complete. Results saved in aggressive_scan.txt"
+else
+    echo "[!] No live hosts found!"
+fi
