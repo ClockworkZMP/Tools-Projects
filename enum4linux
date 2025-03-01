@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Define input file containing target IPs
+INPUT_FILE="targets.txt"
+
+# Check if input file exists
+if [ ! -f "$INPUT_FILE" ]; then
+    echo "[!] Target file not found!"
+    exit 1
+fi
+
+# Loop through each IP and run enum4linux
+while IFS= read -r ip; do
+    echo "[*] Running enum4linux against $ip..."
+    enum4linux -a "$ip" | tee "enum4linux_$ip.txt"
+    echo "[*] Scan for $ip complete. Results saved in enum4linux_$ip.txt"
+done < "$INPUT_FILE"
+
+echo "[*] All scans completed!"
