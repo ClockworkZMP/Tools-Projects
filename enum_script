@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# Define network subnet
+SUBNET="192.168.1.0/24"
+
+# Define output files
+LIVE_HOSTS="live_hosts.txt"
+SERVICE_SCAN="service_scan.txt"
+
+# Step 1: Scan for live hosts
+echo "[*] Scanning for live hosts in $SUBNET..."
+nmap -sn $SUBNET -oG - | awk '/Up$/{print $2}' > $LIVE_HOSTS
+echo "[*] Live hosts saved to $LIVE_HOSTS"
+
+# Step 2: Perform a service scan on discovered hosts
+echo "[*] Scanning open services on live hosts..."
+nmap -sC -sV -oN $SERVICE_SCAN -iL $LIVE_HOSTS
+echo "[*] Service scan results saved to $SERVICE_SCAN"
+
+# Step 3: Parse service scan results and run corresponding enumeration tools
+while read -r HOST; do
+    echo "[*] Enumerating services on $HOST..."
+    
+    # Extract open ports from Nmap results
+    PORTS=$(grep -A 10 "$HOST" $SERVICE_SCAN | grep "open" | awk '{print $1}' | cut -d '/' -f1)
+    
+    for PORT in $PORTS; do
+        case $PORT in
+            21)
+                echo "[*] Running FTP enumeration on $HOST..."
+                nmap --script=ftp-anon -p 21 $HOST -oN "ftp_enum_$HOST.txt"
+                ;;
+            22)
+                echo "[*] Running SSH audit on $HOST..."
+                ssh-audit $HOST > "ssh_enum_$HOST.txt"
+                ;;
+            25)
+                echo "[*] Running SMTP user enumeration on $HOST..."
+                smtp-user-enum -M VRFY -U /usr/share/wordlists/names.txt -t $HOST > "smtp_enum_$HOST.txt"
+                ;;
+            80|443)
+                echo "[*] Running Gobuster for web enumeration on $HOST..."
+                gobuster dir -u http://$HOST -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o "web_enum_$HOST.txt"
+                ;;
+            139|445)
+                echo "[*] Running SMB enumeration on $HOST..."
+                enum4linux -a $HOST > "smb_enum_$HOST.txt"
+                ;;
+            3306)
+                echo "[*] Running MySQL enumeration on $HOST..."
+                mysql -h $HOST -u root -e "SHOW DATABASES;" > "mysql_enum_$HOST.txt"
+                ;;
+            3389)
+                echo "[*] Running RDP brute force attempt on $HOST..."
+                ncrack -p 3389 -U /usr/share/wordlists/usernames.txt -P /usr/share/wordlists/passwords.txt $HOST > "rdp_enum_$HOST.txt"
+                ;;
+            *)
+                echo "[*] No predefined enumeration for port $PORT on $HOST."
+                ;;
+        esac
+    done
+done < $LIVE_HOSTS
+
+echo "[*] Enumeration completed. Check individual *_enum_*.txt files."
