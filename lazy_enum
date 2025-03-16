@@ -1,0 +1,85 @@
+import subprocess
+import re
+
+# Define common ports and enumeration commands
+COMMON_PORTS = {
+    21: "nmap -sV -p 21 --script=ftp-anon,ftp-bounce,ftp-syst {host}",
+    22: "nmap -sV -p 22 --script=ssh-auth-methods,ssh-hostkey {host}",
+    25: "nmap -sV -p 25 --script=smtp-commands {host}",
+    53: "nmap -sV -p 53 --script=dns-nsid {host}",
+    80: "nmap -sV -p 80 --script=http-title,http-server-header {host}",
+    110: "nmap -sV -p 110 --script=pop3-capabilities {host}",
+    139: "nmap -sV -p 139 --script=smb-os-discovery,smb-protocols {host}",
+    443: "nmap -sV -p 443 --script=ssl-cert,ssl-enum-ciphers {host}",
+    445: "nmap -sV -p 445 --script=smb-os-discovery,smb-enum-shares {host}",
+    3389: "nmap -sV -p 3389 --script=rdp-enum-encryption {host}"
+}
+
+OUTPUT_FILE = "network_scan_results.txt"
+
+def discover_hosts(network_range):
+    """Finds active hosts in the given network range."""
+    print("[*] Scanning for active hosts...")
+    try:
+        result = subprocess.run(["nmap", "-sn", network_range], capture_output=True, text=True)
+        hosts = re.findall(r"Nmap scan report for ([\d\.]+)", result.stdout)
+        print(f"[*] Found {len(hosts)} active hosts.")
+        return hosts
+    except Exception as e:
+        print(f"[!] Error scanning network: {e}")
+        return []
+
+def scan_ports(host):
+    """Finds open ports on the host."""
+    print(f"[*] Scanning {host} for open ports...")
+    try:
+        result = subprocess.run(["nmap", "-p", ",".join(map(str, COMMON_PORTS.keys())), host, "-oG", "-"],
+                                capture_output=True, text=True)
+        open_ports = re.findall(r"(\d+)/open", result.stdout)
+        open_ports = list(map(int, open_ports))
+        print(f"[+] {host} has open ports: {open_ports}")
+        return open_ports
+    except Exception as e:
+        print(f"[!] Error scanning ports on {host}: {e}")
+        return []
+
+def enumerate_services(host, open_ports):
+    """Runs enumeration scripts for each open port."""
+    results = []
+    for port in open_ports:
+        if port in COMMON_PORTS:
+            print(f"[*] Running enumeration for {host}:{port}...")
+            try:
+                command = COMMON_PORTS[port].format(host=host)
+                result = subprocess.run(command.split(), capture_output=True, text=True)
+                results.append(f"\n--- Enumeration Results for {host}:{port} ---\n{result.stdout}")
+            except Exception as e:
+                print(f"[!] Error enumerating {host}:{port}: {e}")
+    return results
+
+def main():
+    network_range = input("Enter network range (e.g., 192.168.1.0/24): ")
+    
+    # Discover hosts
+    hosts = discover_hosts(network_range)
+    if not hosts:
+        print("[!] No active hosts found.")
+        return
+
+    all_results = []
+    
+    # Scan each host for open ports and enumerate
+    for host in hosts:
+        open_ports = scan_ports(host)
+        if open_ports:
+            results = enumerate_services(host, open_ports)
+            all_results.extend(results)
+
+    # Save results to file
+    with open(OUTPUT_FILE, "w") as f:
+        f.writelines(all_results)
+    
+    print(f"[+] Scan complete. Results saved to {OUTPUT_FILE}")
+
+if __name__ == "__main__":
+    main()
